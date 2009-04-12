@@ -15,37 +15,33 @@ Note that '/', if given in arguments, is encoded:
     >>> add_query_params('http://example.com/a/b/c?a=b', b='d', foo='/bar')
     'http://example.com/a/b/c?a=b&b=d&foo=%2Fbar'
 
-Duplicates are discarded:
+Duplicates are retained and different values for the same key supported:
 
     >>> add_query_params('http://example.com/a/b/c?a=b', a='b')
-    'http://example.com/a/b/c?a=b'
+    'http://example.com/a/b/c?a=b&a=b'
 
     >>> add_query_params('http://example.com/a/b/c?a=b&c=q', a='b', b='d',
     ...  c='q')
-    'http://example.com/a/b/c?a=b&c=q&b=d'
-
-But different values for the same key are supported:
+    'http://example.com/a/b/c?a=b&c=q&a=b&c=q&b=d'
 
     >>> add_query_params('http://example.com/a/b/c?a=b', a='c', b='d')
     'http://example.com/a/b/c?a=b&a=c&b=d'
 
-Pass different values for a single key in a list (again, duplicates are
-removed):
+Pass different values for a single key in a list:
 
     >>> add_query_params('http://example.com/a/b/c?a=b', a=('q', 'b', 'c'),
     ... b='d')
-    'http://example.com/a/b/c?a=b&a=q&a=c&b=d'
+    'http://example.com/a/b/c?a=b&a=q&a=b&a=c&b=d'
 
 Keys with no value are respected, pass ``None`` to create one:
 
     >>> add_query_params('http://example.com/a/b/c?a', b=None)
     'http://example.com/a/b/c?a&b'
 
-But if a value is given, the empty key is considered a duplicate (i.e. the
-case of a&a=b is considered nonsensical):
+A key can be both empty and have a value:
 
     >>> add_query_params('http://example.com/a/b/c?a', a='b', c=None)
-    'http://example.com/a/b/c?a=b&c'
+    'http://example.com/a/b/c?a&a=b&c'
 
 If you need to pass in key names that are not allowed in keyword arguments,
 pass them via a dictionary in second argument:
@@ -57,11 +53,11 @@ Order of original parameters is retained, although similar keys are grouped
 together. Order of keyword arguments is not (and can not be) retained:
 
     >>> add_query_params('foo?a=b&b=c&a=b&a=d', a='b')
-    'foo?a=b&a=d&b=c'
+    'foo?a=b&b=c&a=b&a=d&a=b'
 
     >>> add_query_params('http://example.com/a/b/c?a=b&q=c&e=d',
     ... x='y', e=1, o=2)
-    'http://example.com/a/b/c?a=b&q=c&e=d&e=1&x=y&o=2'
+    'http://example.com/a/b/c?a=b&q=c&e=d&x=y&e=1&o=2'
 
 If you need to retain the order of the added parameters, use an
 :class:`OrderedDict` as the second argument (*params_dict*):
@@ -79,7 +75,7 @@ former are used before the latter:
 
     >>> add_query_params('http://example.com/a/b/c?a=b', od, xavier=1.1,
     ... zorg='a', alpha='b', watt='c', borg='d')
-    'http://example.com/a/b/c?a=b&xavier=1&xavier=1.1&abacus=2&janus=3&zorg=a&borg=d&watt=c&alpha=b'
+    'http://example.com/a/b/c?a=b&xavier=1&abacus=2&janus=3&zorg=a&xavier=1.1&borg=d&watt=c&alpha=b'
 
 Do nothing with a single argument:
 
@@ -88,6 +84,11 @@ Do nothing with a single argument:
 
     >>> add_query_params('arbitrary strange stuff?öäüõ*()+-=42')
     'arbitrary strange stuff?\\xc3\\xb6\\xc3\\xa4\\xc3\\xbc\\xc3\\xb5*()+-=42'
+
+Some edge cases:
+
+    >>> add_query_params('foo?a&a', b=None)
+    'foo?a&a&b'
 
 Exceptions:
 
@@ -129,17 +130,17 @@ def add_query_params(*args, **kwargs):
 
     url = urlparse(args[0])
 
-    # preserve original query parameters and their order,
-    # duplicates will be removed and keys grouped though,
-    # e.g. a=b&b=c&a=b&a=d will be changed to a=b&a=d&b=c
-    query_args = OrderedDict()
+    # preserve original query parameters and their order
+    query_args = []
     if url.query:
+        # support semicolon separators
+        query = url.query.replace(';', '&')
         for chunk in url.query.split('&'):
             if '=' in chunk:
                 key, val = chunk.split('=', 1)
-                _update_key(query_args, key, val)
+                query_args.append((key, val))
             else:
-                _update_key(query_args, chunk, None)
+                query_args.append((chunk, None))
 
     # merge params_dict
     if len(args) == 2 and args[1]:
@@ -150,14 +151,14 @@ def add_query_params(*args, **kwargs):
             raise TypeError('The second argument of add_query_params() '
                     'is not a dict-like object (missing iteritems())')
         for key, val in params_dict.iteritems():
-            _update_key(query_args, key, val)
+            query_args.append((key, val))
 
     # merge kwargs
     for key, val in kwargs.iteritems():
-        _update_key(query_args, key, val)
+        query_args.append((key, val))
 
     encoded = []
-    for key, val in query_args.iteritems():
+    for key, val in query_args:
         if val is None:
             encoded.append(quote(key, safe='')) # '/' is not safe here
         else:
@@ -166,51 +167,6 @@ def add_query_params(*args, **kwargs):
     return urlunparse((url.scheme, url.netloc, url.path, url.params,
         '&'.join(encoded), url.fragment))
 
-def _update_key(dct, key, val):
-    """
-    Update a key in dict *dct*. If they key already exists in *dct*, but the
-    value doesn't, a list of values is created and the value appended to it.
-    """
-    if key in dct:
-        if val == dct[key]:
-            return
-        dct[key] = _unique_list(dct[key], val)
-    else:
-        dct[key] = val
-
-def _unique_list(a, b):
-    """
-    Merges two lists, retaining only unique elements.
-    Based on Dave Kirby's recipe from
-    http://www.peterbe.com/plog/uniqifiers-benchmark/uniqifiers_benchmark.py
-    """
-    # this is ugly and should really be solved with an OrderedSet, see below
-    assert not isinstance(a, tuple)
-    assert not (a is None and b is None) # already handled with ==
-    if not isinstance(a, list):
-        a = [a]
-    if isinstance(b, tuple):
-        a = a + list(b)
-    elif isinstance(b, list):
-        a = a + b
-    else:
-        a.append(b)
-    seen = set()
-    return [x for x in a if x is not None and x not in seen and not seen.add(x)]
-
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
-
-# OrderedSet would considerably simplify the above:
-#
-# def _update_key(dct, key, val):
-#     if key in dct:
-#         if dct[key] == val:
-#             return
-#         s = OrderedSet(dct[key]) # without None handling
-#         s.append(val)
-#         dct[key] = s
-#     else:
-#         dct[key] = val
-
