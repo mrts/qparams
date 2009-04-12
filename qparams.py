@@ -86,6 +86,9 @@ Do nothing with a single argument:
     >>> add_query_params('a')
     'a'
 
+    >>> add_query_params('arbitrary strange stuff?öäüõ*()+-=42')
+    'arbitrary strange stuff?\\xc3\\xb6\\xc3\\xa4\\xc3\\xbc\\xc3\\xb5*()+-=42'
+
 Exceptions:
 
     >>> add_query_params()
