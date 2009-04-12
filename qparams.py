@@ -116,7 +116,6 @@ Exceptions:
     TypeError: The second argument of add_query_params() is not a dict-like object (missing iteritems())
 """
 
-from collections import OrderedDict
 from urlparse import urlparse, urlunparse
 from urllib import urlencode, quote
 
