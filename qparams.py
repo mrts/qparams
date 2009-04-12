@@ -90,6 +90,9 @@ Some edge cases:
     >>> add_query_params('foo?a&a', b=None)
     'foo?a&a&b'
 
+    >>> add_query_params('foo?a=1;b=2', b=None, c=3)
+    'foo?a=1;b=2;c=3;b'
+
 Exceptions:
 
     >>> add_query_params()
@@ -130,17 +133,7 @@ def add_query_params(*args, **kwargs):
 
     url = urlparse(args[0])
 
-    # preserve original query parameters and their order
     query_args = []
-    if url.query:
-        # support semicolon separators
-        query = url.query.replace(';', '&')
-        for chunk in url.query.split('&'):
-            if '=' in chunk:
-                key, val = chunk.split('=', 1)
-                query_args.append((key, val))
-            else:
-                query_args.append((chunk, None))
 
     # merge params_dict
     if len(args) == 2 and args[1]:
@@ -164,8 +157,16 @@ def add_query_params(*args, **kwargs):
         else:
             encoded.append(urlencode(((key, val),), True))
 
+    # preserve original query parameters
+    if url.query:
+        # keep semicolon separators if in original query
+        sep = (';' if ';' in url.query else '&')
+        encoded = url.query + sep + sep.join(encoded)
+    else:
+        encoded = '&'.join(encoded)
+
     return urlunparse((url.scheme, url.netloc, url.path, url.params,
-        '&'.join(encoded), url.fragment))
+        encoded, url.fragment))
 
 if __name__ == '__main__':
     import doctest
