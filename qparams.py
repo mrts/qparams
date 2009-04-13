@@ -15,7 +15,8 @@ Note that '/', if given in arguments, is encoded:
     >>> add_query_params('http://example.com/a/b/c?a=b', b='d', foo='/bar')
     'http://example.com/a/b/c?a=b&b=d&foo=%2Fbar'
 
-Duplicates are retained and different values for the same key supported:
+Duplicates are retained and different values for the same key supported by
+default (see below for alternate behaviour):
 
     >>> add_query_params('http://example.com/a/b/c?a=b', a='b')
     'http://example.com/a/b/c?a=b&a=b'
@@ -48,16 +49,6 @@ pass them via a dictionary in second argument:
 
     >>> add_query_params('foo', True, {"+'|äüö": 'bar'})
     'foo?%2B%27%7C%C3%A4%C3%BC%C3%B6=bar'
-
-Order of original parameters is retained. Order of keyword arguments is not
-(and can not be) retained:
-
-    >>> add_query_params('foo?a=b&b=c&a=b&a=d', a='b')
-    'foo?a=b&b=c&a=b&a=d&a=b'
-
-    >>> add_query_params('http://example.com/a/b/c?a=b&q=c&e=d',
-    ... x='y', e=1, o=2)
-    'http://example.com/a/b/c?a=b&q=c&e=d&x=y&e=1&o=2'
 
 There are three different strategies for key-value handling. The default,
 ``allow_dups = True`` (*allow_dups* is the second optional positional
@@ -104,6 +95,16 @@ values override the value (like dict.update()):
     >>> add_query_params('http://example.com/a/b/c?a=b', None,
     ... b='d', a=('q', 'b', 'c'))
     'http://example.com/a/b/c?a=q&a=b&a=c&b=d'
+
+Order of original parameters is retained. Order of keyword arguments is not
+(and can not be) retained:
+
+    >>> add_query_params('foo?a=b&b=c&a=b&a=d', a='b')
+    'foo?a=b&b=c&a=b&a=d&a=b'
+
+    >>> add_query_params('http://example.com/a/b/c?a=b&q=c&e=d',
+    ... x='y', e=1, o=2)
+    'http://example.com/a/b/c?a=b&q=c&e=d&x=y&e=1&o=2'
 
 If you need to retain the order of the added parameters, use an
 :class:`OrderedDict` as the second argument (*params_dict*):
